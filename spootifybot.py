@@ -157,14 +157,15 @@ def main():
     logging.basicConfig(level=log_level)
 
     port = os.environ.get('PORT', 8080)
+    
+    print(f"Listening on port {port}")
     server = WebConsoleHTTPServer(port)
     server.start()
     
-    time.sleep(30)
-
     spotify_config = SpotifyAppConfig()
     discord_config = DiscordAppConfig()
 
+    print("Starting bot...")
     bot = SpootifyBot(spotify_config=spotify_config, discord_config=discord_config)
     bot.run()
 
