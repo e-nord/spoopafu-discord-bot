@@ -6,7 +6,23 @@ import spotipy
 import re
 import os
 import logging
+import http.server
+import threading
 
+class WebConsoleHTTPServer:
+
+    def __init__(self, port):
+        self.port = port
+        server_address = ('', self.port)
+        self.server = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
+        self.thread = threading.Thread(target=self._run, args=(self.server, ))
+
+    def start(self):
+        self.thread.start()
+
+    def _run(self, httpd):
+        httpd.serve_forever()
+        
 class MessageScannerDiscordClient(discord.Client):
 
     def __init__(self, message_handlers):
@@ -38,7 +54,7 @@ class MessageScannerDiscordClient(discord.Client):
 class GoodBotMessageScanner:
 
     def __init__(self):
-        self.good_bot_regex = re.compile("g[o]*d\s.*\sbot", re.IGNORECASE)
+        self.good_bot_regex = re.compile("g[o]{2,}d\s.*\sbot", re.IGNORECASE)
 
     def handle_message(self, message_content):
         reply = None
@@ -109,6 +125,7 @@ class SpotifyAppConfig:
         self.redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", redirect_uri)
         self.playlist_id = os.environ.get("SPOTIFY_PLAYLIST_ID", playlist_id)
 
+import time
 @dataclass
 class DiscordAppConfig:
     def __init__(self, token=None):
@@ -136,11 +153,17 @@ class SpootifyBot:
         self.discord_client.run(self.discord_client_token)
 
 def main():
-    spotify_config = SpotifyAppConfig()
-    discord_config = DiscordAppConfig()
-
     log_level = os.environ.get('LOGLEVEL', 'DEBUG').upper()
     logging.basicConfig(level=log_level)
+
+    port = os.environ.get('PORT', 8080)
+    server = WebConsoleHTTPServer(port)
+    server.start()
+    
+    time.sleep(30)
+
+    spotify_config = SpotifyAppConfig()
+    discord_config = DiscordAppConfig()
 
     bot = SpootifyBot(spotify_config=spotify_config, discord_config=discord_config)
     bot.run()
