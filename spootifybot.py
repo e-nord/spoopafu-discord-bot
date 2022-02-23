@@ -150,6 +150,11 @@ class SpootifyBot:
         self.discord_client = MessageScannerDiscordClient(scanners)
 
     def run(self):
+        #Authenticate by firing off a test request
+        logging.info("Firing off Spotify API call...")
+        results = self.spotify.current_user()
+        logging.debug(results)
+
         self.discord_client.run(self.discord_client_token)
 
 def main():
@@ -158,14 +163,12 @@ def main():
 
     port = int(os.environ.get('PORT', 8080))
     
-    #print(f"Listening on port {port}")
-    #server = WebConsoleHTTPServer(port)
-    #server.start()
+    logging.info(f"Listening on port {port}")
     
     spotify_config = SpotifyAppConfig(redirect_uri_port=port)
     discord_config = DiscordAppConfig()
 
-    print("Starting bot...")
+    logging.info("Starting bot...")
     bot = SpootifyBot(spotify_config=spotify_config, discord_config=discord_config)
     bot.run()
 
