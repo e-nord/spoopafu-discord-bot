@@ -118,11 +118,11 @@ class SpotifyMessageScanner:
 
 @dataclass
 class SpotifyAppConfig:
-    def __init__(self, username=None, client_id=None, client_secret=None, redirect_uri=None, playlist_id=None):
+    def __init__(self, username=None, client_id=None, client_secret=None, redirect_uri=None, playlist_id=None, redirect_uri_port=None):
         self.username = os.environ.get("SPOTIFY_USERNAME", username)
         self.client_id = os.environ.get("SPOTIFY_CLIENT_ID", client_id)
         self.client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET", client_secret)
-        self.redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", redirect_uri)
+        self.redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", f'{redirect_uri}:{redirect_uri_port}')
         self.playlist_id = os.environ.get("SPOTIFY_PLAYLIST_ID", playlist_id)
 
 import time
@@ -158,11 +158,11 @@ def main():
 
     port = int(os.environ.get('PORT', 8080))
     
-    print(f"Listening on port {port}")
-    server = WebConsoleHTTPServer(port)
-    server.start()
+    #print(f"Listening on port {port}")
+    #server = WebConsoleHTTPServer(port)
+    #server.start()
     
-    spotify_config = SpotifyAppConfig()
+    spotify_config = SpotifyAppConfig(redirect_uri_port=port)
     discord_config = DiscordAppConfig()
 
     print("Starting bot...")
