@@ -156,7 +156,7 @@ def main():
     log_level = os.environ.get('LOGLEVEL', 'DEBUG').upper()
     logging.basicConfig(level=log_level)
 
-    port = os.environ.get('PORT', 8080)
+    port = int(os.environ.get('PORT', 8080))
     
     print(f"Listening on port {port}")
     server = WebConsoleHTTPServer(port)
