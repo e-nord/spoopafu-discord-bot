@@ -142,7 +142,8 @@ class SpootifyBot:
             client_id=spotify_config.client_id,
             client_secret=spotify_config.client_secret,
             redirect_uri=spotify_config.redirect_uri,
-            scope=SpootifyBot.SCOPE)
+            scope=SpootifyBot.SCOPE,
+            open_browser=False)
         self.spotify = spotipy.Spotify(auth_manager=auth_manager)
         self.spotify_message_scanner = SpotifyMessageScanner(self.spotify, playlist_id=spotify_config.playlist_id)
         self.good_boy_message_scanner = GoodBotMessageScanner()
