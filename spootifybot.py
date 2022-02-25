@@ -118,12 +118,22 @@ class SpotifyMessageScanner:
 
 @dataclass
 class SpotifyAppConfig:
-    def __init__(self, username=None, client_id=None, client_secret=None, redirect_uri=None, playlist_id=None, redirect_uri_port=None):
+    def __init__(self, username=None, client_id=None, client_secret=None, redirect_uri=None, playlist_id=None):
         self.username = os.environ.get("SPOTIFY_USERNAME", username)
         self.client_id = os.environ.get("SPOTIFY_CLIENT_ID", client_id)
         self.client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET", client_secret)
-        self.redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", f'{redirect_uri}:{redirect_uri_port}')
+        self.redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", f'{redirect_uri}')
         self.playlist_id = os.environ.get("SPOTIFY_PLAYLIST_ID", playlist_id)
+        self.token_cache = os.environ.get("TOKEN_CACHE")
+        self.token_cache_file = '.cache-{}'.format(self.username)
+
+    def maybe_write_token_cache_file(self):
+        if not os.path.exists(self.token_cache_file):
+            if self.token_cache:
+                with open(self.token_cache_file, 'w') as cache_file:
+                    cache_file.write(self.token_cache)
+            else:
+                logging.warning("TOKEN_CACHE environment variable not set, unable to write OAuth token cache file")
 
 import time
 @dataclass
@@ -165,8 +175,12 @@ def main():
     port = int(os.environ.get('PORT', 8080))
     
     logging.info(f"Listening on port {port}")
-    
-    spotify_config = SpotifyAppConfig(redirect_uri_port=port)
+    console = WebConsoleHTTPServer(port)
+    console.start()
+
+    spotify_config = SpotifyAppConfig()
+    spotify_config.maybe_write_token_cache_file()
+
     discord_config = DiscordAppConfig()
 
     logging.info("Starting bot...")
