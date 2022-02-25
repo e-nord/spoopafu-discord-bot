@@ -54,33 +54,24 @@ class MessageScannerDiscordClient(discord.Client):
         else:
             raise
 
-class GoodBotMessageScanner:
+class BotEmoteReactionMessageScanner:
 
+    REACTIONS = [
+        ("b[a]{1,}d\s+b[o0]t", ":sob:"),
+        ("g[o0]{2,}d\s+b[o0]t", ":flushed:")
+    ]
+    
     def __init__(self):
-        self.good_bot_regex = re.compile("g[o]{2,}d\s+bot", re.IGNORECASE)
+        self.patterns = [(re.compile(pair[0], re.IGNORECASE), pair[1]) for pair in BotEmoteReactionMessageScanner.REACTIONS]
 
     def handle_message(self, message_content):
-        reply = None
+        for regex,emote in self.patterns:
+            match = regex.search(message_content)
+            if match:
+                return emote
 
-        match = self.good_bot_regex.search(message_content)
-        if match:
-            reply = ":flushed:"
+        return None
 
-        return reply
-
-class BadBotMessageScanner:
-
-    def __init__(self):
-        self.bad_bot_regex = re.compile("b[a]{1,}d\s+bot", re.IGNORECASE)
-
-    def handle_message(self, message_content):
-        reply = None
-
-        match = self.bad_bot_regex.search(message_content)
-        if match:
-            reply = ":sob:"
-
-        return reply
 
 class SpotifyMessageScanner:
     def __init__(self, spotify, playlist_id):
@@ -173,7 +164,7 @@ class SpootifyBot:
             open_browser=False)
         self.spotify = spotipy.Spotify(auth_manager=auth_manager)
         self.spotify_message_scanner = SpotifyMessageScanner(self.spotify, playlist_id=spotify_config.playlist_id)
-        scanners = [self.spotify_message_scanner, GoodBotMessageScanner(), BadBotMessageScanner()]
+        scanners = [self.spotify_message_scanner, BotEmoteReactionMessageScanner()]
         self.discord_client = MessageScannerDiscordClient(scanners)
 
     def run(self):
