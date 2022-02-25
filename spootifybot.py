@@ -8,15 +8,53 @@ import os
 import logging
 import http.server
 import threading
+import requests
+
+class StoppableThread(threading.Thread):
+
+    def __init__(self):
+        super(StoppableThread, self).__init__()
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        self._stop_event.set()
+
+    def join(self, *args, **kwargs):
+        self.stop()
+        super(StoppableThread,self).join(*args, **kwargs)
+
+    def is_stopped(self):
+        return self._stop_event.is_set()
+
+class PingThread(StoppableThread):
+    def __init__(self, ping_url, ping_interval_sec):
+        super(PingThread, self).__init__()
+        self.ping_url = ping_url
+        self.daemon = True
+        self.ping_interval_sec = ping_interval_sec
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def start(self) -> None:
+        self.logger.info("Starting ping keepalive...")
+        return super().start()
+
+    def run(self):
+        while not self.is_stopped():
+            resp = requests.get(self.ping_url)
+            self.logger.info(resp)
+            time.sleep(self.ping_interval_sec)
+    
 
 class WebConsoleHTTPServer:
 
     def __init__(self, port):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.port = port
         server_address = ('', self.port)
+        self.logger.info(f"Listening on port {port}")
         self.server = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
         self.thread = threading.Thread(target=self._run, args=(self.server, ))
-        self.thread.setDaemon(False)
+        self.thread.daemon = True
 
     def start(self):
         self.thread.start()
@@ -154,6 +192,7 @@ class SpootifyBot:
     SCOPE = "playlist-modify-public playlist-read-collaborative playlist-modify-private"
 
     def __init__(self, spotify_config, discord_config):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.discord_client_token = discord_config.token
         auth_manager = spotipy.SpotifyOAuth(
             username=spotify_config.username,
@@ -169,10 +208,11 @@ class SpootifyBot:
 
     def run(self):
         #Authenticate by firing off a test request
-        logging.info("Firing off Spotify API call...")
+        self.logger.info("Firing off Spotify API call...")
         results = self.spotify.current_user()
-        logging.debug(results)
+        self.logger.debug(results)
 
+        self.logger.info("Starting bot...")
         self.discord_client.run(self.discord_client_token)
 
 def main():
@@ -181,16 +221,20 @@ def main():
 
     port = int(os.environ.get('PORT', 8080))
     
-    logging.info(f"Listening on port {port}")
     console = WebConsoleHTTPServer(port)
     console.start()
+
+    ping_url = os.environ.get('PING_URL')
+    if ping_url:
+        ping_interval_sec = int(os.environ.get('PING_INTERVAL_SEC', 60))
+        keep_alive = PingThread(ping_url, ping_interval_sec)
+        keep_alive.start()
 
     spotify_config = SpotifyAppConfig()
     spotify_config.maybe_write_token_cache_file()
 
     discord_config = DiscordAppConfig()
 
-    logging.info("Starting bot...")
     bot = SpootifyBot(spotify_config=spotify_config, discord_config=discord_config)
     bot.run()
 
