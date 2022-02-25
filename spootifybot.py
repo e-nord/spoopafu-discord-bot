@@ -16,6 +16,7 @@ class WebConsoleHTTPServer:
         server_address = ('', self.port)
         self.server = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
         self.thread = threading.Thread(target=self._run, args=(self.server, ))
+        self.thread.setDaemon(False)
 
     def start(self):
         self.thread.start()
@@ -43,7 +44,9 @@ class MessageScannerDiscordClient(discord.Client):
                 if reply:
                     await message.channel.send(reply)
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(f"on_message: {e}")
+            await message.channel.send("Whoops that hurt my brain...maybe try again?")
+
 
     async def on_error(self, event, *args, **kwargs):
         if event == 'on_message':
@@ -54,7 +57,7 @@ class MessageScannerDiscordClient(discord.Client):
 class GoodBotMessageScanner:
 
     def __init__(self):
-        self.good_bot_regex = re.compile("g[o]{2,}d\s.*\sbot", re.IGNORECASE)
+        self.good_bot_regex = re.compile("g[o]{2,}d\s+bot", re.IGNORECASE)
 
     def handle_message(self, message_content):
         reply = None
@@ -62,6 +65,20 @@ class GoodBotMessageScanner:
         match = self.good_bot_regex.search(message_content)
         if match:
             reply = ":flushed:"
+
+        return reply
+
+class BadBotMessageScanner:
+
+    def __init__(self):
+        self.bad_bot_regex = re.compile("b[a]{1,}d\s+bot", re.IGNORECASE)
+
+    def handle_message(self, message_content):
+        reply = None
+
+        match = self.bad_bot_regex.search(message_content)
+        if match:
+            reply = ":sob:"
 
         return reply
 
@@ -156,8 +173,7 @@ class SpootifyBot:
             open_browser=False)
         self.spotify = spotipy.Spotify(auth_manager=auth_manager)
         self.spotify_message_scanner = SpotifyMessageScanner(self.spotify, playlist_id=spotify_config.playlist_id)
-        self.good_boy_message_scanner = GoodBotMessageScanner()
-        scanners = [self.spotify_message_scanner, self.good_boy_message_scanner]
+        scanners = [self.spotify_message_scanner, GoodBotMessageScanner(), BadBotMessageScanner()]
         self.discord_client = MessageScannerDiscordClient(scanners)
 
     def run(self):
