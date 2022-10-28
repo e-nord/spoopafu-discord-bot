@@ -67,7 +67,9 @@ class MessageScannerDiscordClient(discord.Client):
     def __init__(self, message_handlers):
         self.message_handlers = message_handlers
         self.logger = logging.getLogger(self.__class__.__name__)
-        super().__init__()
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(intents=intents)
 
     async def on_ready(self):
         self.logger.info(f'{self.user.name} has connected to Discord!')
@@ -218,7 +220,7 @@ class SpootifyBot:
 def main():
     log_level = os.environ.get('LOGLEVEL', 'DEBUG').upper()
     logging.basicConfig(level=log_level)
-
+    
     port = int(os.environ.get('PORT', 8080))
     
     console = WebConsoleHTTPServer(port)
