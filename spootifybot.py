@@ -107,7 +107,7 @@ class MessageScannerDiscordClient(discord.Client):
 
             if len(old_message_to_handle) > 0:
                 
-                await channel.send("These were here all along I swear :sunglasses:")
+                await channel.send("{} here all along I swear :sunglasses:".format("These were" if len(old_message_to_handle) > 0 else "This was"))
                 await asyncio.sleep(2)
                 
                 for old_message in old_message_to_handle:
@@ -116,7 +116,7 @@ class MessageScannerDiscordClient(discord.Client):
                     
             else:
                 await asyncio.sleep(5)
-                await channel.send("Phew nothing happened while I was gone :relieved:")
+                await channel.send("Phew! Nothing major happened while I was gone :relieved:")
                 
             self.ready_timestamp = last_message.created_at
 

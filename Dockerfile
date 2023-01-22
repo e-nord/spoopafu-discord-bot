@@ -1,4 +1,4 @@
 FROM python:3
-RUN pip install spotipy discord.py
 ADD spootifybot.py /
+RUN pip install -r requirements.txt
 CMD [ "python", "spootifybot.py" ]
