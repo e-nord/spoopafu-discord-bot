@@ -163,19 +163,24 @@ class MessageScannerDiscordClient(discord.Client):
 
 class BotEmoteReactionMessageScanner(DiscordMessageRegexScanner):
 
+    PATTERNS = [
+        re.compile(r"b[a]{1,}d\s+b[o0]t"),
+        re.compile(r"g[o0]{2,}d\s+b[o0]t")
+    ]
+
     REACTIONS = [
-        (r"b[a]{1,}d\s+b[o0]t", ":sob:"),
-        (r"g[o0]{2,}d\s+b[o0]t", ":flushed:")
+        ":sob:",
+        ":flushed:"
     ]
 
     def __init__(self):
-        super().__init__(BotEmoteReactionMessageScanner.REACTIONS)
+        super().__init__(BotEmoteReactionMessageScanner.PATTERNS)
 
     def handle_message(self, _: discord.Client, message: discord.Message):
-        for regex,matched_message in self.patterns:
+        for idx,regex in enumerate(self.patterns):
             match = regex.search(message.content)
             if match:
-                return matched_message
+                return BotEmoteReactionMessageScanner.REACTIONS[idx]
         return None
 
 class SpotifyMessageScanner(DiscordMessageRegexScanner):
@@ -203,6 +208,7 @@ class SpotifyMessageScanner(DiscordMessageRegexScanner):
         reply = None
 
         match = self.PATTERNS[0].search(message.content)
+        # Song search syntax with <>
         if match:
             song_metadata = match.group(1)
             self.logger.debug("Found a song in a message! It's: %s", song_metadata)
@@ -231,13 +237,14 @@ class SpotifyMessageScanner(DiscordMessageRegexScanner):
                     self.logger.warning("No query results found")
             else:
                 self.logger.warning("No response from search call")
-        else:
+        else: # Look for song links to Spotify API
             match = self.PATTERNS[1].search(message.content)
             if match:
                 self.logger.debug("Found a link: %s", match)
                 track_id = match.group(2)
                 self.logger.debug("Adding track %s to playlist %s", track_id, self.playlist_id)
                 self.__add_track_to_playlist(track_id)
+                reply = "Adding that one to the collection"
 
         return reply
 
