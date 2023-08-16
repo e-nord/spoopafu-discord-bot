@@ -46,7 +46,7 @@ class PingThread(StoppableThread):
             resp = requests.get(self.ping_url)
             self.logger.info(resp)
             time.sleep(self.ping_interval_sec)
-    
+
 
 class WebConsoleHTTPServer:
 
@@ -54,7 +54,7 @@ class WebConsoleHTTPServer:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.port = port
         server_address = ('', self.port)
-        self.logger.info(f"Listening on port {port}")
+        self.logger.info("Listening on port %d", port)
         self.server = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
         self.thread = threading.Thread(target=self._run, args=(self.server, ))
         self.thread.daemon = True
@@ -64,95 +64,17 @@ class WebConsoleHTTPServer:
 
     def _run(self, httpd: http.server.HTTPServer):
         httpd.serve_forever()
-        
-        
-class MessageScanner:
-    def is_match(message: discord.Message):
+
+class DiscordMessageScanner:
+    def is_match(self, message: discord.Message):
+        pass
+
+    def handle_message(self, discord_client: discord.Client, message: discord.Message):
         pass
     
-    def handle_message(discord_client: discord.Client, message: discord.Message):
-        pass
-        
-class MessageScannerDiscordClient(discord.Client):
-
-    def __init__(self, message_handlers: list[MessageScanner]):
-        self.message_handlers = message_handlers
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.ready_timestamp = None
-        intents = discord.Intents.default()
-        intents.message_content = True
-        super().__init__(intents=intents)
-
-    async def search_old_messages(self, channel: discord.TextChannel, message_handler: MessageScanner):
-        self.logger.info(f"Looking back over messages from before being ready: {self.ready_timestamp}")
-
-        async with channel.typing():
-
-            old_messages: list[discord.Message] = [message async for message in channel.history(limit=100, before=self.ready_timestamp) ]
-            
-            old_message_to_handle = []
-            for old_message in old_messages:
-                self.logger.info(f"Checking msg: {old_message.content} sent at {old_message.created_at} by {old_message.author}")
-                
-                last_message = old_message
-                
-                if old_message.author == self.user:
-                    self.logger.info(f"All caught up with messages. Recent bot reply at {old_message.created_at.isoformat()}")
-                    break
-                
-                if message_handler.is_match(old_message):
-                    old_message_to_handle.append(old_message)
-                    
-            await asyncio.sleep(3)
-
-            if len(old_message_to_handle) > 0:
-                
-                await channel.send("{} here all along I swear :sunglasses:".format("These were" if len(old_message_to_handle) > 0 else "This was"))
-                await asyncio.sleep(2)
-                
-                for old_message in old_message_to_handle:
-                    reply = message_handler.handle_message(self, old_message)
-                    await channel.send(reply, reference=old_message)
-                    
-            else:
-                await asyncio.sleep(5)
-                await channel.send("Phew! Nothing major happened while I was gone :relieved:")
-                
-            self.ready_timestamp = last_message.created_at
-
-    async def on_ready(self):
-        self.logger.info(f'{self.user.name} has connected to Discord!')
-        for guild in self.guilds:
-            self.logger.info(f'Serving guild: {guild}')
-        self.ready_timestamp = datetime.datetime.now()
-            
-    async def on_message(self, message: discord.Message):
-        self.logger.info(f"Received message: {message.content}")
-        try:
-            for message_handler in self.message_handlers:
-                reply = message_handler.handle_message(self, message)
-                if reply:
-                    await message.channel.send(reply, reference=message)
-        except Exception as e:
-            self.logger.error(f"on_message: {e}")
-            await message.channel.send("Whoops that hurt my brain...maybe try again?")
-
-
-    async def on_error(self, event, *args, **kwargs):
-        if event == 'on_message':
-            self.logger.warning(f"error: {args[0]}")
-        else:
-            raise
-
-class BotEmoteReactionMessageScanner:
-
-    REACTIONS = [
-        ("b[a]{1,}d\s+b[o0]t", ":sob:"),
-        ("g[o0]{2,}d\s+b[o0]t", ":flushed:")
-    ]
-    
-    def __init__(self):
-        self.patterns = [(re.compile(pair[0], re.IGNORECASE), pair[1]) for pair in BotEmoteReactionMessageScanner.REACTIONS]
+class DiscordMessageRegexScanner(DiscordMessageScanner):
+    def __init__(self, patterns):
+        self.patterns = patterns
 
     def is_match(self, message: discord.Message):
         for regex,_ in self.patterns:
@@ -161,21 +83,113 @@ class BotEmoteReactionMessageScanner:
                 return True
         return False
 
-    def handle_message(self, discord_client: MessageScannerDiscordClient, message: discord.Message):
-        for regex,emote in self.patterns:
+class MessageScannerDiscordClient(discord.Client):
+
+    def __init__(self, message_handlers: list[DiscordMessageScanner]):
+        self.message_handlers = message_handlers
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.ready_timestamp = None
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(intents=intents)
+
+    async def search_old_messages(self, channel: discord.TextChannel, message_handler: DiscordMessageScanner):
+        last_message = None
+        
+        self.logger.info("Looking back over messages from before being ready: %s", self.ready_timestamp)
+
+        async with channel.typing():
+
+            old_messages: list[discord.Message] = [message async for message in channel.history(limit=100, before=self.ready_timestamp) ]
+
+            old_message_to_handle = []
+            for old_message in old_messages:
+                self.logger.info("Checking msg: %s sent at %s by %s", old_message.content, old_message.created_at, old_message.author)
+
+                last_message = old_message
+
+                if old_message.author == self.user:
+                    self.logger.info("All caught up with messages. Recent bot reply at %s", old_message.created_at.isoformat())
+                    break
+
+                if message_handler.is_match(old_message):
+                    old_message_to_handle.append(old_message)
+
+            await asyncio.sleep(3)
+
+            if len(old_message_to_handle) > 0:
+
+                await channel.send(f"{'These were' if len(old_message_to_handle) > 0 else 'This was'} here all along I swear :sunglasses:")
+                await asyncio.sleep(2)
+
+                for old_message in old_message_to_handle:
+                    reply = message_handler.handle_message(self, old_message)
+                    await channel.send(reply, reference=old_message)
+
+            else:
+                await asyncio.sleep(5)
+                await channel.send("Phew! Nothing major happened while I was gone :relieved:")
+
+            if last_message:
+                self.ready_timestamp = last_message.created_at
+
+    async def on_ready(self):
+        if self.user:
+            self.logger.info('%s has connected to Discord!', self.user.name)
+        else:
+            self.logger.info("No logged in user??")
+            
+        for guild in self.guilds:
+            self.logger.info('Serving guild: %s', guild)
+        self.ready_timestamp = datetime.datetime.now()
+
+    async def on_message(self, message: discord.Message):
+        self.logger.info("Received message: %s", message.content)
+        try:
+            for message_handler in self.message_handlers:
+                reply = message_handler.handle_message(self, message)
+                if reply:
+                    await message.channel.send(reply, reference=message)
+        except Exception as e:
+            self.logger.error("on_message: %s", e)
+            await message.channel.send("Whoops that hurt my brain...maybe try again?")
+
+
+    async def on_error(self, event, *args, **_):
+        if event == 'on_message':
+            self.logger.warning("error: %s", args[0])
+        else:
+            raise
+
+class BotEmoteReactionMessageScanner(DiscordMessageRegexScanner):
+
+    REACTIONS = [
+        (r"b[a]{1,}d\s+b[o0]t", ":sob:"),
+        (r"g[o0]{2,}d\s+b[o0]t", ":flushed:")
+    ]
+
+    def __init__(self):
+        super().__init__(BotEmoteReactionMessageScanner.REACTIONS)
+
+    def handle_message(self, _: discord.Client, message: discord.Message):
+        for regex,matched_message in self.patterns:
             match = regex.search(message.content)
             if match:
-                return emote
-
+                return matched_message
         return None
 
-class SpotifyMessageScanner:
+class SpotifyMessageScanner(DiscordMessageRegexScanner):
+    PATTERNS = [
+        re.compile(r"\<(.*?)\>"),
+        re.compile(r"(?:https?:\/\/)?(?:[^.]+\.)?open\.spotify\.com(\/track\/(.*)\?(.*))?")
+    ]
+    
     def __init__(self, spotify: spotipy.Spotify, playlist_id: str):
         self.spotify = spotify
         self.playlist_id = playlist_id
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.song_metadata_regex = re.compile("\<(.*?)\>")
-    
+        super().__init__(SpotifyMessageScanner.PATTERNS)
+
     def __add_track_to_playlist(self, track_id: str):
         items = [track_id]
         self.spotify.playlist_remove_all_occurrences_of_items(self.playlist_id, items)
@@ -184,35 +198,32 @@ class SpotifyMessageScanner:
             self.logger.warning("No response from add playlist items call")
         else:
             self.logger.debug(result)
-            
-    def is_match(self, message: discord.Message):
-        return self.song_metadata_regex.search(message.content) is not None
 
-    def handle_message(self, discord_client: MessageScannerDiscordClient, message: discord.Message):
+    def handle_message(self, _: MessageScannerDiscordClient, message: discord.Message):
         reply = None
 
-        match = self.song_metadata_regex.search(message.content)
+        match = self.PATTERNS[0].search(message.content)
         if match:
             song_metadata = match.group(1)
-            self.logger.debug(f"Found a song in a message! It's: {song_metadata}")
+            self.logger.debug("Found a song in a message! It's: %s", song_metadata)
 
             song_metadata = song_metadata.replace("-", "")
 
-            self.logger.debug(f"Searching for Spotify track...")
+            self.logger.debug("Searching for Spotify track...")
             results = self.spotify.search(q=f'{song_metadata}', type='track')
             if results:
-                self.logger.debug(f"Found something: {results}")
+                self.logger.debug("Found something: %s", results)
 
                 query_items = results['tracks']['items']
                 if len(query_items):
                     track = results['tracks']['items'][0]
                     spotify_url = track['external_urls']['spotify']
 
-                    self.logger.debug(f"{track}")
-                    self.logger.debug(f"Spotify URL: {spotify_url}")
+                    self.logger.debug("Track: %s", track)
+                    self.logger.debug("Spotify URL: %s", spotify_url)
 
                     track_id = track['id']
-                    self.logger.debug(f"Adding track {track_id} to playlist {self.playlist_id}")
+                    self.logger.debug("Adding track %s to playlist %s", track_id, self.playlist_id)
                     self.__add_track_to_playlist(track_id)
 
                     reply = spotify_url
@@ -220,17 +231,24 @@ class SpotifyMessageScanner:
                     self.logger.warning("No query results found")
             else:
                 self.logger.warning("No response from search call")
+        else:
+            match = self.PATTERNS[1].search(message.content)
+            if match:
+                self.logger.debug("Found a link: %s", match)
+                track_id = match.group(2)
+                self.logger.debug("Adding track %s to playlist %s", track_id, self.playlist_id)
+                self.__add_track_to_playlist(track_id)
 
         return reply
 
-class WakeUpMessageScanner:
+class WakeUpMessageScanner(DiscordMessageScanner):
 
-    REGEX = "w[a+]ke[\s+]?[u+]p[\s+]b[o+]t[!+]?"
+    REGEX = r"w[a+]ke[\s+]?[u+]p[\s+]b[o+]t[!+]?"
 
     BOT_REPLIES = [
         "Oh my :flushed: I must have dozed off...let me see what I've missed"
     ]
-    
+   
     def __init__(self, spotify_message_scanner: SpotifyMessageScanner):
         self.regex = re.compile(WakeUpMessageScanner.REGEX, re.IGNORECASE)
         self.spotify_message_scanner = spotify_message_scanner
@@ -257,21 +275,21 @@ class SpotifyAppConfig:
 
     def validate(self):
         if not self.username:
-            raise ValueError("Missing environment variable: SPOTIFY_USERNAME") 
+            raise ValueError("Missing environment variable: SPOTIFY_USERNAME")
         if not self.client_id:
-            raise ValueError("Missing environment variable: SPOTIFY_CLIENT_ID") 
+            raise ValueError("Missing environment variable: SPOTIFY_CLIENT_ID")
         if not self.client_secret:
-            raise ValueError("Missing environment variable: SPOTIFY_CLIENT_SECRET") 
+            raise ValueError("Missing environment variable: SPOTIFY_CLIENT_SECRET")
         if not self.redirect_uri:
-            raise ValueError("Missing environment variable: SPOTIFY_REDIRECT_URI") 
+            raise ValueError("Missing environment variable: SPOTIFY_REDIRECT_URI")
         if not self.playlist_id:
-            raise ValueError("Missing environment variable: SPOTIFY_PLAYLIST_ID") 
+            raise ValueError("Missing environment variable: SPOTIFY_PLAYLIST_ID")
         
     def maybe_write_token_cache_file(self):
         token_cache_file = '.cache-{}'.format(self.username)
         if not os.path.exists(token_cache_file):
             if self.token_cache:
-                with open(token_cache_file, 'w') as cache_file:
+                with open(token_cache_file, mode='w', encoding='utf-8') as cache_file:
                     cache_file.write(self.token_cache)
             else:
                 logging.warning("TOKEN_CACHE environment variable not set, unable to write OAuth token cache file")
