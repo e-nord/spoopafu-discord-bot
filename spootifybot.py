@@ -204,7 +204,7 @@ class SpotifyMessageScanner(DiscordMessageRegexScanner):
         else:
             self.logger.debug(result)
 
-    def handle_message(self, _: MessageScannerDiscordClient, message: discord.Message):
+    def handle_message(self, client: MessageScannerDiscordClient, message: discord.Message):
         reply = None
 
         match = self.PATTERNS[0].search(message.content)
@@ -239,7 +239,7 @@ class SpotifyMessageScanner(DiscordMessageRegexScanner):
                 self.logger.warning("No response from search call")
         else: # Look for song links to Spotify API
             match = self.PATTERNS[1].search(message.content)
-            if match:
+            if match and client.user and message.author.id != client.user.id:
                 self.logger.debug("Found a link: %s", match)
                 track_id = match.group(2)
                 self.logger.debug("Adding track %s to playlist %s", track_id, self.playlist_id)
