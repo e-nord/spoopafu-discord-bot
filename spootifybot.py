@@ -186,7 +186,7 @@ class BotEmoteReactionMessageScanner(DiscordMessageRegexScanner):
 class SpotifyMessageScanner(DiscordMessageRegexScanner):
     PATTERNS = [
         re.compile(r"\<(.*?)\>"),
-        re.compile(r"(?:https?:\/\/)?(?:[^.]+\.)?open\.spotify\.com(\/track\/(.*)\?(.*))?")
+        re.compile(r"(?:https?:\/\/)?(?:[^.]+\.)?open\.spotify\.com\/track\/([A-Za-z0-9_]*)")
     ]
     
     def __init__(self, spotify: spotipy.Spotify, playlist_id: str):
