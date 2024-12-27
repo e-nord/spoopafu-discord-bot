@@ -77,7 +77,7 @@ class DiscordMessageRegexScanner(DiscordMessageScanner):
         self.patterns = patterns
 
     def is_match(self, message: discord.Message):
-        for regex,_ in self.patterns:
+        for _,regex in enumerate(self.patterns):
             match = regex.search(message.content)
             if match:
                 return True
