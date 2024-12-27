@@ -1,4 +1,4 @@
-# sp00tifyb0t
+# spoopafu discord bot
 
 ## Description
 

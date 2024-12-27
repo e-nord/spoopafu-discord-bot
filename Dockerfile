@@ -1,5 +1,5 @@
-FROM python:3
+FROM python:3.11
 ADD requirements.txt /
 RUN pip install -r /requirements.txt
-ADD spootifybot.py /
-CMD [ "python", "spootifybot.py" ]
+ADD spoopafubot.py /
+CMD [ "python", "spoopafubot.py" ]

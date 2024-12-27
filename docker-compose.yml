@@ -1,10 +1,9 @@
-version: "3"
 services:
   bot:
     build: .
-    image: sp00tifyb0t
+    image: spoopafubot
     restart: always
-    container_name: sp00tifyb0t
+    container_name: spoopafubot
     environment:
       SPOTIFY_USERNAME: ${SPOTIFY_USERNAME}
       SPOTIFY_PLAYLIST_ID: ${SPOTIFY_PLAYLIST_ID}

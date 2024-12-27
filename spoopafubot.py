@@ -164,8 +164,8 @@ class MessageScannerDiscordClient(discord.Client):
 class BotEmoteReactionMessageScanner(DiscordMessageRegexScanner):
 
     PATTERNS = [
-        re.compile(r"b[a]{1,}d\s+b[o0]t"),
-        re.compile(r"g[o0]{2,}d\s+b[o0]t")
+        re.compile(r"b[a]{1,}d\s+b[o0]t", re.IGNORECASE),
+        re.compile(r"g[o0]{2,}d\s+b[o0]t", re.IGNORECASE)
     ]
 
     REACTIONS = [
@@ -185,8 +185,8 @@ class BotEmoteReactionMessageScanner(DiscordMessageRegexScanner):
 
 class SpotifyMessageScanner(DiscordMessageRegexScanner):
     PATTERNS = [
-        re.compile(r"\<(.*?)\>"),
-        re.compile(r"(?:https?:\/\/)?(?:[^.]+\.)?open\.spotify\.com\/track\/([A-Za-z0-9_]*)")
+        re.compile(r"\<(.*?)\>", re.IGNORECASE),
+        re.compile(r"(?:https?:\/\/)?(?:[^.]+\.)?open\.spotify\.com\/track\/([A-Za-z0-9_]*)", re.IGNORECASE)
     ]
     
     def __init__(self, spotify: spotipy.Spotify, playlist_id: str):
