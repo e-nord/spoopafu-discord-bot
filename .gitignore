@@ -130,3 +130,6 @@ dmypy.json
 
 .cache*
 env.bat
+
+ollama/
+cache/

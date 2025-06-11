@@ -1,3 +1,4 @@
 spotipy 
 discord.py
 requests
+PyNaCl

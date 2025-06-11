@@ -5,65 +5,13 @@ from dataclasses import dataclass
 import datetime
 import discord
 import spotipy
+import spotipy.util as util
 import re
 import os
 import logging
-import http.server
-import threading
 import requests
 import time
-
-class StoppableThread(threading.Thread):
-
-    def __init__(self):
-        super(StoppableThread, self).__init__()
-        self._stop_event = threading.Event()
-
-    def stop(self):
-        self._stop_event.set()
-
-    def join(self, *args, **kwargs):
-        self.stop()
-        super(StoppableThread,self).join(*args, **kwargs)
-
-    def is_stopped(self):
-        return self._stop_event.is_set()
-
-class PingThread(StoppableThread):
-    def __init__(self, ping_url, ping_interval_sec):
-        super(PingThread, self).__init__()
-        self.ping_url = ping_url
-        self.daemon = True
-        self.ping_interval_sec = ping_interval_sec
-        self.logger = logging.getLogger(self.__class__.__name__)
-
-    def start(self) -> None:
-        self.logger.info("Starting ping keepalive...")
-        return super().start()
-
-    def run(self):
-        while not self.is_stopped():
-            resp = requests.get(self.ping_url)
-            self.logger.info(resp)
-            time.sleep(self.ping_interval_sec)
-
-
-class WebConsoleHTTPServer:
-
-    def __init__(self, port):
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.port = port
-        server_address = ('', self.port)
-        self.logger.info("Listening on port %d", port)
-        self.server = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
-        self.thread = threading.Thread(target=self._run, args=(self.server, ))
-        self.thread.daemon = True
-
-    def start(self):
-        self.thread.start()
-
-    def _run(self, httpd: http.server.HTTPServer):
-        httpd.serve_forever()
+import argparse
 
 class DiscordMessageScanner:
     def is_match(self, message: discord.Message):
@@ -278,7 +226,6 @@ class SpotifyAppConfig:
         self.client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET", client_secret)
         self.redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", redirect_uri)
         self.playlist_id = os.environ.get("SPOTIFY_PLAYLIST_ID", playlist_id)
-        self.token_cache = os.environ.get("TOKEN_CACHE")
 
     def validate(self):
         if not self.username:
@@ -292,15 +239,6 @@ class SpotifyAppConfig:
         if not self.playlist_id:
             raise ValueError("Missing environment variable: SPOTIFY_PLAYLIST_ID")
         
-    def maybe_write_token_cache_file(self):
-        token_cache_file = '.cache-{}'.format(self.username)
-        if not os.path.exists(token_cache_file):
-            if self.token_cache:
-                with open(token_cache_file, mode='w', encoding='utf-8') as cache_file:
-                    cache_file.write(self.token_cache)
-            else:
-                logging.warning("TOKEN_CACHE environment variable not set, unable to write OAuth token cache file")
-
 @dataclass
 class DiscordAppConfig:
     def __init__(self, token=None):
@@ -317,20 +255,23 @@ class SpootifyBot:
     def __init__(self, spotify_config, discord_config):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.discord_client_token = discord_config.token
-        auth_manager = spotipy.SpotifyOAuth(
-            username=spotify_config.username,
-            client_id=spotify_config.client_id,
-            client_secret=spotify_config.client_secret,
-            redirect_uri=spotify_config.redirect_uri,
-            scope=SpootifyBot.SCOPE,
-            open_browser=False)
-        self.spotify = spotipy.Spotify(auth_manager=auth_manager)
+        
+        token = util.prompt_for_user_token(spotify_config.username,
+                           SpootifyBot.SCOPE,
+                           client_id=spotify_config.client_id,
+                           client_secret=spotify_config.client_secret,
+                           redirect_uri=spotify_config.redirect_uri)
+        
+        self.spotify = spotipy.Spotify(auth=token)
+        
         spotify_message_scanner = SpotifyMessageScanner(self.spotify, playlist_id=spotify_config.playlist_id)
+        
         scanners = [
             spotify_message_scanner, 
             BotEmoteReactionMessageScanner(),
             WakeUpMessageScanner(spotify_message_scanner)
             ]
+        
         self.discord_client = MessageScannerDiscordClient(scanners)
 
     def run(self):
@@ -346,26 +287,27 @@ def main():
     log_level = os.environ.get('LOGLEVEL', 'DEBUG').upper()
     logging.basicConfig(level=log_level)
     
-    port = int(os.environ.get('PORT', 8080))
-    
-    console = WebConsoleHTTPServer(port)
-    console.start()
-
-    ping_url = os.environ.get('PING_URL')
-    if ping_url:
-        ping_interval_sec = int(os.environ.get('PING_INTERVAL_SEC', 60))
-        keep_alive = PingThread(ping_url, ping_interval_sec)
-        keep_alive.start()
-
+    parser = argparse.ArgumentParser(description="Spoopafu Discord Bot")
+    parser.add_argument("-a", "--auth", action="store_true", help="Perform OAUTH authorization and exit")
+        
+    args = parser.parse_args()
+        
     spotify_config = SpotifyAppConfig()
     spotify_config.validate()
-    spotify_config.maybe_write_token_cache_file()
 
     discord_config = DiscordAppConfig()
     discord_config.validate()
-
-    bot = SpootifyBot(spotify_config=spotify_config, discord_config=discord_config)
-    bot.run()
+    
+    if args.auth:
+        token = util.prompt_for_user_token(spotify_config.username,
+                    SpootifyBot.SCOPE,
+                    client_id=spotify_config.client_id,
+                    client_secret=spotify_config.client_secret,
+                    redirect_uri=spotify_config.redirect_uri)
+        print(f"TOKEN: {token}")
+    else:
+        bot = SpootifyBot(spotify_config=spotify_config, discord_config=discord_config)
+        bot.run()
 
 if __name__ == '__main__':
     main()

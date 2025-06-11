@@ -1,9 +1,12 @@
 services:
   bot:
     build: .
-    image: spoopafubot
-    restart: always
-    container_name: spoopafubot
+    image: spoopafu-bot:latest
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    volumes:
+      - ./cache:/usr/app/cache
     environment:
       SPOTIFY_USERNAME: ${SPOTIFY_USERNAME}
       SPOTIFY_PLAYLIST_ID: ${SPOTIFY_PLAYLIST_ID}
@@ -11,4 +14,21 @@ services:
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
       DISCORD_TOKEN: ${DISCORD_TOKEN}
-      TOKEN_CACHE: ${TOKEN_CACHE}
+    networks:
+      - spoopafu-bot
+
+  ollama:
+    image: docker.io/ollama/ollama:latest
+    volumes:
+      - ./ollama/ollama:/root/.ollama
+    tty: true
+    restart: unless-stopped
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - spoopafu-bot
+
+networks:
+  spoopafu-bot:
+    external: false
