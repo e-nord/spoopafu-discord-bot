@@ -1,0 +1,135 @@
+# namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spoopafu-bot
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ollama-secrets
+  namespace: spoopafu-bot
+type: Opaque
+stringData:
+  OLLAMA_KEEP_ALIVE: "24h"
+  OLLAMA_HOST: "0.0.0.0"
+
+---
+# persistent-volumes.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bot-cache
+  namespace: spoopafu-bot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-data
+  namespace: spoopafu-bot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# ollama-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: spoopafu-bot
+spec:
+  selector:
+    app: ollama
+  ports:
+    - port: 11434
+      targetPort: 11434
+      name: ollama
+  type: ClusterIP
+
+---
+# ollama-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: spoopafu-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        ports:
+        - containerPort: 11434
+        envFrom:
+        - secretRef:
+            name: ollama-secrets
+        volumeMounts:
+        - name: ollama-data
+          mountPath: /root/.ollama
+        tty: true
+      volumes:
+      - name: ollama-data
+        persistentVolumeClaim:
+          claimName: ollama-data
+
+---
+# bot-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spoopafu-bot
+  namespace: spoopafu-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spoopafu-bot
+  template:
+    metadata:
+      labels:
+        app: spoopafu-bot
+    spec:
+      initContainers:
+      - name: wait-for-ollama
+        image: busybox:1.35
+        command: ['sh', '-c']
+        args:
+        - |
+          until nc -z ollama 11434; do
+            echo "Waiting for Ollama to be ready..."
+            sleep 2
+          done
+          echo "Ollama is ready!"
+      containers:
+      - name: bot
+        image: spoopafu-bot:latest
+        envFrom:
+        - secretRef:
+            name: bot-secrets
+        volumeMounts:
+        - name: bot-cache
+          mountPath: /usr/app/cache
+      volumes:
+      - name: bot-cache
+        persistentVolumeClaim:
+          claimName: bot-cache

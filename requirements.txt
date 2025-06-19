@@ -2,3 +2,5 @@ spotipy
 discord.py
 requests
 PyNaCl
+ollama
+langchain-community
